@@ -72,10 +72,14 @@ jobs:
           cd firefox-ios
           xcodebuild -resolvePackageDependencies -project firefox-ios/Client.xcodeproj
 
+      - name: Listar schemes disponibles (diagnóstico)
+        run: |
+          cd firefox-ios
+          xcodebuild -project firefox-ios/Client.xcodeproj -list
+
       - name: Compilar (Fennec, sin firmar, dispositivo arm64)
         run: |
           cd firefox-ios
-          set -o pipefail
           xcodebuild build \
             -project firefox-ios/Client.xcodeproj \
             -scheme Fennec \
@@ -89,9 +93,9 @@ jobs:
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             SWIFT_STRICT_CONCURRENCY=minimal \
             SWIFT_VERSION=5 \
-            2>&1 | tee xcodebuild.log | xcpretty
-          XCODEBUILD_STATUS=$?
-          if [ $XCODEBUILD_STATUS -ne 0 ]; then
+            2>&1 | tee xcodebuild.log | xcpretty || true
+          XCODEBUILD_STATUS=${PIPESTATUS[0]}
+          if [ "$XCODEBUILD_STATUS" -ne 0 ]; then
             echo "=== BUILD FAILED (status $XCODEBUILD_STATUS) — últimas 150 líneas: ==="
             tail -150 xcodebuild.log
             exit 1
