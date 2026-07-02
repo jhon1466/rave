@@ -83,6 +83,14 @@ jobs:
           cd firefox-ios
           xcodebuild -project firefox-ios/Client.xcodeproj -list
 
+      - name: Listar SDKs y destinos válidos (diagnóstico)
+        run: |
+          cd firefox-ios
+          echo "=== SDKs instalados ==="
+          xcodebuild -showsdks
+          echo "=== Destinos válidos para el scheme Fennec ==="
+          xcodebuild -project firefox-ios/Client.xcodeproj -scheme Fennec -showdestinations || true
+
       - name: Compilar (Fennec, sin firmar, dispositivo arm64)
         run: |
           cd firefox-ios
