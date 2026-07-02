@@ -102,8 +102,7 @@ jobs:
             -project firefox-ios/Client.xcodeproj \
             -scheme Fennec \
             -configuration Fennec \
-            -sdk iphoneos \
-            -destination 'generic/platform=iOS' \
+            -destination 'id=dvtdevice-DVTiPhonePlaceholder-iphoneos:placeholder' \
             -derivedDataPath build \
             ONLY_ACTIVE_ARCH=NO \
             ARCHS=arm64 \
