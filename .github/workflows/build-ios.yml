@@ -31,19 +31,15 @@ jobs:
           sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
           xcodebuild -version
 
-      - name: Falsificar Device Support para iOS 18.2 (gap conocido en runners de GitHub)
+      - name: Registrar plataformas de Xcode 16.2 (runFirstLaunch)
         run: |
-          # El SDK de iOS 18.2 SÍ está instalado, pero el runner no trae los
-          # archivos de "Device Support" para versiones recientes (solo hasta
-          # 16.4), y xcodebuild -destination generic/platform=iOS los exige
-          # para resolver "Any iOS Device", aunque no se use para debug real.
-          # Se symlinkea una carpeta existente con el nombre esperado.
-          DS_DIR="/Applications/Xcode_16.2.app/Contents/Developer/Platforms/iPhoneOS.platform/DeviceSupport"
-          ls "$DS_DIR"
-          LATEST=$(ls "$DS_DIR" | sort -V | tail -1)
-          echo "Usando $LATEST como base para falsificar 18.2"
-          sudo ln -sf "$DS_DIR/$LATEST" "$DS_DIR/18.2"
-          ls -la "$DS_DIR"
+          # Cuando se selecciona un Xcode que no es el "default" del runner,
+          # sus plataformas (SDKs físicamente presentes) no quedan registradas
+          # en la base de datos interna de Xcode hasta correr esto, lo cual
+          # provoca el falso "iOS 18.2 is not installed" al resolver destinos.
+          sudo /Applications/Xcode_16.2.app/Contents/Developer/usr/bin/xcodebuild -runFirstLaunch
+          sudo xcodebuild -runFirstLaunch
+          xcrun simctl list runtimes || true
 
       - name: Clonar firefox-ios
         run: |
