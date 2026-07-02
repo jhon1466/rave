@@ -1,0 +1,111 @@
+name: Build Rave iOS (IPA sin firmar)
+
+# Compila Firefox iOS (release/v140) rebrandeado como "Rave" y genera un IPA
+# SIN FIRMAR, apto para sideload con AltStore / Sideloadly (no requiere cuenta
+# de Apple Developer). Se ejecuta manualmente desde la pestaña Actions.
+
+on:
+  workflow_dispatch:
+    inputs:
+      firefox_ios_ref:
+        description: "Rama/tag de mozilla-mobile/firefox-ios a compilar"
+        required: true
+        default: "release/v140"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 120
+    steps:
+      - name: Checkout repo Rave (workflow + assets)
+        uses: actions/checkout@v4
+        with:
+          path: rave
+
+      - name: Seleccionar Xcode 16
+        run: sudo xcode-select -s /Applications/Xcode_16.app || sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Clonar firefox-ios
+        run: |
+          git clone --depth 1 --branch "${{ github.event.inputs.firefox_ios_ref }}" \
+            https://github.com/mozilla-mobile/firefox-ios.git firefox-ios
+
+      - name: Rebranding a "Rave"
+        run: |
+          cd firefox-ios
+          CFG=firefox-ios/Client/Configuration/Fennec.xcconfig
+          # Nombre visible de la app y del widget
+          sed -i '' 's/^MOZ_BUNDLE_DISPLAY_NAME = .*/MOZ_BUNDLE_DISPLAY_NAME = Rave/' "$CFG"
+          sed -i '' 's/^MOZ_TODAY_WIDGET_SEARCH_DISPLAY_NAME = .*/MOZ_TODAY_WIDGET_SEARCH_DISPLAY_NAME = Rave - Search/' "$CFG"
+          echo "=== Fennec.xcconfig resultante ==="
+          grep -E "MOZ_BUNDLE_DISPLAY_NAME|MOZ_TODAY_WIDGET" "$CFG"
+          # Reemplazar los 3 PNGs del app icon (formato iOS single-size 1024)
+          ICONSET=firefox-ios/Client/Assets/AppIcons.xcassets/AppIcon.appiconset
+          cp ../rave/ios-assets/rave-icon-1024.png "$ICONSET/appstore.png"
+          cp ../rave/ios-assets/rave-icon-1024.png "$ICONSET/appstore-dark.png"
+          cp ../rave/ios-assets/rave-icon-1024.png "$ICONSET/appstore-tinted.png"
+          echo "=== app icon reemplazado ==="
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Bootstrap firefox-ios
+        run: |
+          cd firefox-ios
+          sh ./bootstrap.sh
+        env:
+          GITHUB_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compilar (Fennec, sin firmar, dispositivo arm64)
+        run: |
+          cd firefox-ios
+          xcodebuild build \
+            -project firefox-ios/Client.xcodeproj \
+            -scheme Fennec \
+            -configuration Fennec \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            | tee xcodebuild.log | xcpretty || true
+          # Verificar que el .app se generó (xcpretty puede ocultar el status real)
+          APP=$(find build/Build/Products -maxdepth 2 -name "*.app" -type d | head -1)
+          if [ -z "$APP" ]; then
+            echo "ERROR: no se generó el .app"
+            tail -100 xcodebuild.log
+            exit 1
+          fi
+          echo "APP=$APP" >> "$GITHUB_ENV"
+          echo "App compilada: $APP"
+
+      - name: Empaquetar IPA sin firmar
+        run: |
+          cd firefox-ios
+          rm -rf Payload Rave-iOS.ipa
+          mkdir Payload
+          cp -R "$APP" Payload/
+          zip -qr ../Rave-140-ios-unsigned.ipa Payload
+          cd ..
+          ls -la Rave-140-ios-unsigned.ipa
+
+      - name: Subir IPA como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rave-iOS-unsigned-IPA
+          path: Rave-140-ios-unsigned.ipa
+          retention-days: 30
+
+      - name: Adjuntar IPA al release v140.1.0
+        run: |
+          gh release upload v140.1.0 Rave-140-ios-unsigned.ipa \
+            --repo ${{ github.repository }} --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
