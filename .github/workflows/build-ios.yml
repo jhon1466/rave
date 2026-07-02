@@ -26,20 +26,13 @@ jobs:
         with:
           path: rave
 
-      - name: Seleccionar Xcode 16.2 (misma versión que usa el CI de Mozilla)
+      - name: Usar el Xcode default del runner (ya "first-launch" registrado)
         run: |
-          sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+          # Xcode 16.2 (el que usa el CI de Mozilla) no viene registrado como
+          # default en la imagen de GitHub, y "Any iOS Device" falla con un
+          # falso "iOS 18.2 is not installed" pase lo que pase. El Xcode
+          # default (16.4) sí está inicializado de fábrica en la imagen.
           xcodebuild -version
-
-      - name: Registrar plataformas de Xcode 16.2 (runFirstLaunch)
-        run: |
-          # Cuando se selecciona un Xcode que no es el "default" del runner,
-          # sus plataformas (SDKs físicamente presentes) no quedan registradas
-          # en la base de datos interna de Xcode hasta correr esto, lo cual
-          # provoca el falso "iOS 18.2 is not installed" al resolver destinos.
-          sudo /Applications/Xcode_16.2.app/Contents/Developer/usr/bin/xcodebuild -runFirstLaunch
-          sudo xcodebuild -runFirstLaunch
-          xcrun simctl list runtimes || true
 
       - name: Clonar firefox-ios
         run: |
@@ -102,7 +95,8 @@ jobs:
             -project firefox-ios/Client.xcodeproj \
             -scheme Fennec \
             -configuration Fennec \
-            -destination 'id=dvtdevice-DVTiPhonePlaceholder-iphoneos:placeholder' \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             -derivedDataPath build \
             ONLY_ACTIVE_ARCH=NO \
             ARCHS=arm64 \
